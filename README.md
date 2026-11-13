@@ -98,7 +98,7 @@ In Jenkins → Manage Jenkins → Credentials → Global → Add:
 - Name: `employee-app-pipeline`
 - Pipeline → Definition: Pipeline script from SCM
 - SCM: Git
-- Repository URL: `https://github.com/baigmazhar/devops-fullstack-app`
+- Repository URL: `https://github.com/baigmazhar/devops-project`
 - Branch: `main`
 - Script Path: `Jenkinsfile`
 - Save → Build Now
