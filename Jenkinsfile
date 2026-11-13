@@ -5,7 +5,7 @@ pipeline {
         DOCKERHUB_USERNAME = "baigmazhar"
         BACKEND_IMAGE      = "${DOCKERHUB_USERNAME}/employee-backend"
         FRONTEND_IMAGE     = "${DOCKERHUB_USERNAME}/employee-frontend"
-        // K3S_IP is set as a Jenkins environment variable (added after EC2 is up)
+        // K3S_SERVER_IP is configured in Jenkins → Manage Jenkins → Configure System
         K3S_IP             = "${env.K3S_SERVER_IP}"
     }
 
@@ -13,9 +13,8 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                // Pull latest code from GitHub
                 checkout scm
-                echo "Code checked out successfully"
+                echo "Code checked out from GitHub successfully"
             }
         }
 
@@ -32,7 +31,13 @@ pipeline {
             steps {
                 echo "Building frontend Docker image..."
                 dir('frontend') {
-                    sh "docker build -t ${FRONTEND_IMAGE}:${BUILD_NUMBER} -t ${FRONTEND_IMAGE}:latest ."
+                    // Pass the real backend URL as build arg so React bakes it in
+                    sh """
+                        docker build \
+                          --build-arg REACT_APP_SERVER_URL=http://${K3S_IP}:30800/employees \
+                          -t ${FRONTEND_IMAGE}:${BUILD_NUMBER} \
+                          -t ${FRONTEND_IMAGE}:latest .
+                    """
                 }
             }
         }
@@ -40,7 +45,6 @@ pipeline {
         stage('Push Images to DockerHub') {
             steps {
                 echo "Pushing images to DockerHub..."
-                // 'dockerhub-credentials' is the ID we set in Jenkins credentials
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub-credentials',
                     usernameVariable: 'DOCKER_USER',
@@ -57,21 +61,20 @@ pipeline {
 
         stage('Deploy to Kubernetes') {
             steps {
-                echo "Deploying to K3s cluster..."
-                // 'k3s-kubeconfig' is the file credential stored in Jenkins
+                echo "Deploying to K3s Kubernetes cluster..."
                 withCredentials([file(credentialsId: 'k3s-kubeconfig', variable: 'KUBECONFIG')]) {
                     sh "kubectl apply -f k8s/namespace.yaml"
                     sh "kubectl apply -f k8s/postgres-deployment.yaml"
                     sh "kubectl apply -f k8s/backend-deployment.yaml"
                     sh "kubectl apply -f k8s/frontend-deployment.yaml"
 
-                    // Force pods to pull latest image
+                    // Force pods to pull the latest image
                     sh "kubectl rollout restart deployment/backend  -n employee-app"
                     sh "kubectl rollout restart deployment/frontend -n employee-app"
 
-                    // Wait for deployments to be ready
-                    sh "kubectl rollout status deployment/backend  -n employee-app --timeout=120s"
-                    sh "kubectl rollout status deployment/frontend -n employee-app --timeout=120s"
+                    // Wait until deployments are healthy
+                    sh "kubectl rollout status deployment/backend  -n employee-app --timeout=180s"
+                    sh "kubectl rollout status deployment/frontend -n employee-app --timeout=180s"
                 }
             }
         }
@@ -79,10 +82,12 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 withCredentials([file(credentialsId: 'k3s-kubeconfig', variable: 'KUBECONFIG')]) {
-                    sh "kubectl get pods -n employee-app"
+                    sh "kubectl get pods     -n employee-app"
                     sh "kubectl get services -n employee-app"
-                    echo "Frontend URL: http://${K3S_IP}:30080"
-                    echo "Backend URL:  http://${K3S_IP}:30800"
+                    echo "============================================"
+                    echo " Frontend : http://${K3S_IP}:30080"
+                    echo " Backend  : http://${K3S_IP}:30800"
+                    echo "============================================"
                 }
             }
         }
@@ -90,13 +95,13 @@ pipeline {
 
     post {
         success {
-            echo "Pipeline succeeded! Application is live."
+            echo "Pipeline succeeded! Application is live at http://${K3S_IP}:30080"
         }
         failure {
-            echo "Pipeline failed. Check logs above."
+            echo "Pipeline failed. Check the stage logs above."
         }
         always {
-            // Clean up local docker images to save disk space
+            // Clean up local Docker images to free disk space on Jenkins
             sh "docker rmi ${BACKEND_IMAGE}:${BUILD_NUMBER} || true"
             sh "docker rmi ${FRONTEND_IMAGE}:${BUILD_NUMBER} || true"
         }
