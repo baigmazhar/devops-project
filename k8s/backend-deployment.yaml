@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: baigmazhar/employee-backend:latest
+          image: mazharbaig/employee-backend:latest
           ports:
             - containerPort: 8080
           env:

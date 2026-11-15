@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: baigmazhar/employee-frontend:latest
+          image: mazharbaig/employee-frontend:latest
           ports:
             - containerPort: 80
 
