@@ -7,106 +7,82 @@
 | Backend | Go (Golang 1.19) |
 | Database | PostgreSQL 14 |
 | Containerization | Docker |
-| CI/CD | Jenkins |
-| Orchestration | Kubernetes (K3s) |
+| CI/CD | GitHub Actions |
+| Orchestration | Kubernetes (K3s on EC2) |
 | Infrastructure | Terraform (AWS EC2) |
-| Cloud | AWS ap-south-1 (Mumbai) |
+| Cloud | AWS us-east-1 (N. Virginia) |
 
 ## Architecture
 ```
-GitHub Push
+GitHub Push (main branch)
     ↓
-Jenkins (EC2 t2.medium)
-    → Build Docker images
+GitHub Actions
+    → Build Docker images (backend + frontend)
     → Push to DockerHub
-    → Deploy to K3s
+    → Deploy to K3s via kubectl
          ↓
-K3s Kubernetes (EC2 t2.medium)
-    → frontend pod  → NodePort 30080
-    → backend pod   → NodePort 30800
-    → postgres pod  → internal only
+K3s Kubernetes (EC2 t3.micro - us-east-1)
+    → frontend pod  → NodePort 30080  (public)
+    → backend pod   → NodePort 30800  (public)
+    → postgres pod  → ClusterIP       (internal only)
 ```
 
-## URLs (after deployment)
-- Jenkins:  http://<JENKINS_IP>:8080
-- Frontend: http://<K3S_IP>:30080
-- Backend:  http://<K3S_IP>:30800
-
-## Step-by-Step Deployment
-
-### 1. Prerequisites (already done)
-- AWS CLI configured (`aws configure list`)
-- Terraform installed
-- Docker installed
-- SSH key pair exists at `~/.ssh/id_rsa`
-
-### 2. Generate SSH Key (if not exists)
-```bash
-ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa
-```
-
-### 3. Provision Infrastructure with Terraform
-```bash
-cd terraform
-terraform init
-terraform plan
-terraform apply -auto-approve
-```
-Note the output IPs for Jenkins and K3s.
-
-### 4. Wait ~5 minutes for EC2 setup scripts to finish
-Then SSH in to verify:
-```bash
-ssh -i ~/.ssh/id_rsa ubuntu@<JENKINS_IP>
-sudo systemctl status jenkins
-```
-
-### 5. Get Jenkins Initial Password
-```bash
-ssh -i ~/.ssh/id_rsa ubuntu@<JENKINS_IP>
-sudo cat /var/lib/jenkins/secrets/initialAdminPassword
-```
-
-### 6. Setup Jenkins UI
-- Open http://<JENKINS_IP>:8080
-- Paste initial password
-- Install suggested plugins
-- Create admin user
-
-### 7. Add Jenkins Credentials
-In Jenkins → Manage Jenkins → Credentials → Global → Add:
-
-**Credential 1 — DockerHub:**
-- Kind: Username with password
-- ID: `dockerhub-credentials`
-- Username: `baigmazhar`
-- Password: your DockerHub password
-
-**Credential 2 — K3s Kubeconfig:**
-- Run locally: `./scripts/copy-kubeconfig.sh <K3S_IP>`
-- Kind: Secret file
-- ID: `k3s-kubeconfig`
-- File: upload the generated `k3s-kubeconfig.yaml`
-
-### 8. Add Jenkins Environment Variable
-- Manage Jenkins → Configure System → Global Properties → Environment Variables
-- Name: `K3S_SERVER_IP`
-- Value: `<K3S_PUBLIC_IP>`
-
-### 9. Create Jenkins Pipeline Job
-- New Item → Pipeline
-- Name: `employee-app-pipeline`
-- Pipeline → Definition: Pipeline script from SCM
-- SCM: Git
-- Repository URL: `https://github.com/baigmazhar/devops-project`
-- Branch: `main`
-- Script Path: `Jenkinsfile`
-- Save → Build Now
-
-### 10. Access the App
-- Frontend: http://<K3S_IP>:30080
-- Add employees via the UI — data should persist in PostgreSQL
+## Live URLs
+- **Frontend App:** http://3.236.189.81:30080
+- **Backend API:** http://3.236.189.81:30800
+- **GitHub Actions:** https://github.com/baigmazhar/devops-project/actions
 
 ## DockerHub Images
 - `baigmazhar/employee-backend:latest`
 - `baigmazhar/employee-frontend:latest`
+
+## Repository Structure
+```
+devops-project/
+├── .github/workflows/ci-cd.yml  ← GitHub Actions CI/CD pipeline
+├── backend/
+│   ├── Dockerfile               ← 2-stage Go build
+│   └── main.go, go.mod ...      ← Go source code
+├── frontend/
+│   ├── Dockerfile               ← Node build + Nginx serve
+│   ├── nginx.conf               ← Nginx config
+│   └── src/, package.json ...   ← React source code
+├── k8s/
+│   ├── namespace.yaml
+│   ├── postgres-deployment.yaml
+│   ├── backend-deployment.yaml
+│   └── frontend-deployment.yaml
+├── terraform/
+│   ├── main.tf                  ← VPC + EC2 + Security Groups
+│   ├── variables.tf
+│   ├── outputs.tf
+│   ├── user_data_k3s.sh         ← Auto-installs K3s on EC2 boot
+│   └── ...
+└── KNOWLEDGE_BASE.md            ← Full project documentation
+```
+
+## How to Deploy
+
+### 1. Provision Infrastructure
+```bash
+cd terraform
+terraform init
+terraform apply -auto-approve
+```
+
+### 2. Add GitHub Secrets
+Go to GitHub repo → Settings → Secrets → Actions → New secret:
+
+| Secret | Value |
+|---|---|
+| `DOCKERHUB_USERNAME` | `baigmazhar` |
+| `DOCKERHUB_TOKEN` | Your DockerHub password |
+| `K3S_SERVER_IP` | `3.236.189.81` |
+| `K3S_KUBECONFIG` | Base64 encoded kubeconfig from K3s EC2 |
+
+### 3. Trigger Pipeline
+Push any change to `main` branch — GitHub Actions runs automatically.
+
+### 4. Access App
+- Frontend: http://3.236.189.81:30080
+- Add employee data via UI — verify it persists
