@@ -57,40 +57,6 @@ resource "aws_route_table_association" "public_rta" {
 }
 
 # ─────────────────────────────────────────
-# SECURITY GROUP — Jenkins EC2
-# ─────────────────────────────────────────
-resource "aws_security_group" "jenkins_sg" {
-  name        = "jenkins-sg"
-  description = "Allow SSH and Jenkins UI"
-  vpc_id      = aws_vpc.devops_vpc.id
-
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "Jenkins UI"
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = { Name = "jenkins-sg" }
-}
-
-# ─────────────────────────────────────────
 # SECURITY GROUP — K3s EC2
 # ─────────────────────────────────────────
 resource "aws_security_group" "k3s_sg" {
@@ -141,31 +107,11 @@ resource "aws_security_group" "k3s_sg" {
 }
 
 # ─────────────────────────────────────────
-# EC2 — Jenkins Server
-# ─────────────────────────────────────────
-resource "aws_instance" "jenkins" {
-  ami                    = var.ami_id
-  instance_type          = "t2.medium"
-  key_name               = aws_key_pair.devops_key.key_name
-  subnet_id              = aws_subnet.public_subnet.id
-  vpc_security_group_ids = [aws_security_group.jenkins_sg.id]
-
-  user_data = file("${path.module}/user_data_jenkins.sh")
-
-  root_block_device {
-    volume_size = 20
-    volume_type = "gp2"
-  }
-
-  tags = { Name = "jenkins-server" }
-}
-
-# ─────────────────────────────────────────
 # EC2 — K3s (Kubernetes) Server
 # ─────────────────────────────────────────
 resource "aws_instance" "k3s" {
   ami                    = var.ami_id
-  instance_type          = "t2.medium"
+  instance_type          = "t3.micro"
   key_name               = aws_key_pair.devops_key.key_name
   subnet_id              = aws_subnet.public_subnet.id
   vpc_security_group_ids = [aws_security_group.k3s_sg.id]
