@@ -1,0 +1,14 @@
+# Terraform - never commit these
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+*.tfvars
+
+# SSH keys - never commit
+*.pem
+*.key
+
+# OS files
+.DS_Store
+Thumbs.db
