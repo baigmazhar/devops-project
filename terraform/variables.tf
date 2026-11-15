@@ -1,13 +1,13 @@
 variable "aws_region" {
   description = "AWS region to deploy resources"
   type        = string
-  default     = "ap-south-1"
+  default     = "us-east-1"
 }
 
 variable "ami_id" {
-  description = "Ubuntu 22.04 LTS AMI ID for ap-south-1"
+  description = "Ubuntu 22.04 LTS AMI ID for us-east-1"
   type        = string
-  default     = "ami-0f58b397bc5c1f2e8"  # Ubuntu 22.04 LTS - Mumbai region
+  default     = "ami-05221e3867c5db247"  # Ubuntu 22.04 LTS - N. Virginia (us-east-1) latest
 }
 
 variable "public_key_path" {
@@ -20,4 +20,10 @@ variable "dockerhub_username" {
   description = "Your DockerHub username"
   type        = string
   default     = "baigmazhar"
+}
+
+variable "aws_profile" {
+  description = "AWS CLI profile to use"
+  type        = string
+  default     = "mazharhb"
 }
