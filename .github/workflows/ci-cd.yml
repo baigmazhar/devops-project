@@ -1,6 +1,5 @@
 name: CI/CD Pipeline
 
-# Trigger: runs on every push to main branch
 on:
   push:
     branches: [ main ]
@@ -11,65 +10,54 @@ jobs:
 
     steps:
 
-      # Step 1: Checkout code from GitHub
+      # Step 1: Checkout code
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # Step 2: Login to DockerHub
+      # Step 2: Login to DockerHub (explicit docker login)
       - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
       # Step 3: Build and push backend image
       - name: Build & Push Backend Image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          push: true
-          tags: |
-            baigmazhar/employee-backend:latest
-            baigmazhar/employee-backend:${{ github.run_number }}
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/employee-backend:latest \
+                       -t ${{ secrets.DOCKERHUB_USERNAME }}/employee-backend:${{ github.run_number }} \
+                       ./backend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/employee-backend:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/employee-backend:${{ github.run_number }}
 
       # Step 4: Build and push frontend image
-      # Passes K3s IP as build arg so React bakes the backend URL in
       - name: Build & Push Frontend Image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          push: true
-          build-args: |
-            REACT_APP_SERVER_URL=http://${{ secrets.K3S_SERVER_IP }}:30800/employees
-          tags: |
-            baigmazhar/employee-frontend:latest
-            baigmazhar/employee-frontend:${{ github.run_number }}
+        run: |
+          docker build \
+            --build-arg REACT_APP_SERVER_URL=http://${{ secrets.K3S_SERVER_IP }}:30800/employees \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/employee-frontend:latest \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/employee-frontend:${{ github.run_number }} \
+            ./frontend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/employee-frontend:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/employee-frontend:${{ github.run_number }}
 
-      # Step 5: Deploy to K3s Kubernetes cluster
+      # Step 5: Deploy to K3s Kubernetes
       - name: Deploy to Kubernetes
         env:
           KUBECONFIG_DATA: ${{ secrets.K3S_KUBECONFIG }}
         run: |
-          # Install kubectl
           curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/
 
-          # Write kubeconfig from secret
           mkdir -p ~/.kube
           echo "$KUBECONFIG_DATA" | base64 -d > ~/.kube/config
 
-          # Apply all Kubernetes manifests
           kubectl apply -f k8s/namespace.yaml
           kubectl apply -f k8s/postgres-deployment.yaml
           kubectl apply -f k8s/backend-deployment.yaml
           kubectl apply -f k8s/frontend-deployment.yaml
 
-          # Restart pods to pull latest images
           kubectl rollout restart deployment/backend  -n employee-app
           kubectl rollout restart deployment/frontend -n employee-app
 
-          # Wait for deployments to be healthy
           kubectl rollout status deployment/backend  -n employee-app --timeout=180s
           kubectl rollout status deployment/frontend -n employee-app --timeout=180s
 
