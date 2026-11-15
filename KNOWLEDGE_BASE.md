@@ -322,14 +322,12 @@ kubectl describe pod <pod-name> -n employee-app
 - [x] Written Jenkinsfile (5-stage pipeline)
 - [x] Generated SSH key pair
 - [x] Ran terraform apply — 10 resources created on AWS (mazharhb account, us-east-1)
-- [ ] Wait for EC2s to finish booting (5 mins)
-- [ ] Verify Jenkins is running on EC2
-- [ ] Get Jenkins initial password
-- [ ] Configure Jenkins UI (plugins, admin user)
-- [ ] Add DockerHub credentials to Jenkins
-- [ ] Copy K3s kubeconfig to Jenkins
-- [ ] Add K3S_SERVER_IP environment variable in Jenkins
-- [ ] Create Jenkins pipeline job pointing to github.com/baigmazhar/devops-project
-- [ ] Run pipeline — build, push, deploy
-- [ ] Verify app is live at http://44.204.218.140:30080
-- [ ] Test adding employee data via UI
+- [x] Switched CI/CD from Jenkins to GitHub Actions
+- [x] Fixed DockerHub username (mazharbaig)
+- [x] Fixed K3s TLS certificate to accept public IP
+- [x] Upgraded K3s EC2 to t3.small (2GB RAM)
+- [x] New K3s IP: 98.81.102.19
+- [x] Pipeline ran successfully — 1 min 4 sec
+- [x] App is LIVE at http://98.81.102.19:30080
+- [x] Employees can be added and viewed ✅
+- [x] PROJECT COMPLETE ✅
